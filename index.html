@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Daily Habits Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>✅</text></svg>" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div class="app">
+
+  <!-- Header -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-icon">✅</span>
+      <div>
+        <h1>Daily Habits Tracker</h1>
+        <p class="tagline">Build the streak. Break the excuse.</p>
+      </div>
+    </div>
+
+    <div class="topbar-stats" id="topbarStats">
+      <!-- filled by JS -->
+    </div>
+
+    <div class="topbar-actions">
+      <button id="manageHabitsBtn" class="btn btn-ghost" title="Add / edit / remove habits">⚙️ Manage Habits</button>
+      <button id="exportBtn" class="btn btn-ghost" title="Download your data as a JSON backup">⬇ Export</button>
+      <label class="btn btn-ghost" title="Restore data from a JSON backup">
+        ⬆ Import
+        <input type="file" id="importInput" accept="application/json" hidden />
+      </label>
+      <button id="themeToggle" class="btn btn-ghost" title="Toggle light / dark theme">🌙</button>
+    </div>
+  </header>
+
+  <main class="layout">
+
+    <!-- Calendar -->
+    <section class="panel calendar-panel">
+      <div class="panel-header">
+        <button id="prevMonth" class="icon-btn" aria-label="Previous month">‹</button>
+        <h2 id="monthLabel">Month Year</h2>
+        <button id="nextMonth" class="icon-btn" aria-label="Next month">›</button>
+        <button id="todayBtn" class="btn btn-small" style="margin-left:auto">Today</button>
+      </div>
+
+      <div class="weekday-row">
+        <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
+      </div>
+      <div class="calendar-grid" id="calendarGrid">
+        <!-- filled by JS -->
+      </div>
+
+      <div class="legend">
+        <span class="legend-item"><i class="dot dot-green"></i> Completed day</span>
+        <span class="legend-item"><i class="dot dot-amber"></i> Partial</span>
+        <span class="legend-item"><i class="dot dot-red"></i> Missed</span>
+        <span class="legend-item"><i class="dot dot-gray"></i> Future / no data</span>
+      </div>
+
+      <div class="panel weekly-heatmap">
+        <div class="panel-header"><h2>Last 12 Weeks</h2></div>
+        <div id="heatmap" class="heatmap"></div>
+      </div>
+    </section>
+
+    <!-- Day checklist -->
+    <section class="panel day-panel">
+      <div class="panel-header">
+        <h2 id="selectedDateLabel">Today</h2>
+        <span id="selectedDateBadge" class="badge">0 / 0</span>
+      </div>
+
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="dayProgressBar"></div>
+      </div>
+
+      <div id="habitList" class="habit-list">
+        <!-- filled by JS -->
+      </div>
+
+      <p id="futureNotice" class="future-notice" hidden>You can't check off a future date yet — come back when it arrives 🙂</p>
+
+      <div class="day-notes">
+        <label for="dayNotes">Notes for the day</label>
+        <textarea id="dayNotes" rows="3" placeholder="Reflections, blockers, wins..."></textarea>
+      </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="panel stats-panel">
+      <div class="panel-header"><h2>Streaks &amp; Insights</h2></div>
+      <div id="statsGrid" class="stats-grid"></div>
+      <div class="panel-header"><h2>Per-Habit Streaks</h2></div>
+      <div id="habitStreaks" class="habit-streaks"></div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Your data stays on this device (localStorage). Use <strong>Export</strong> regularly to back it up or move it between devices/browsers.</p>
+  </footer>
+</div>
+
+<!-- Manage Habits Modal -->
+<div id="manageModal" class="modal-backdrop" hidden>
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Manage Habits</h2>
+      <button id="closeManageModal" class="icon-btn" aria-label="Close">✕</button>
+    </div>
+
+    <form id="addHabitForm" class="add-habit-form">
+      <input type="text" id="newHabitName" placeholder="Habit name, e.g. Read 20 pages" required maxlength="60" />
+      <input type="text" id="newHabitIcon" placeholder="Emoji" maxlength="4" value="⭐" />
+      <select id="newHabitCategory">
+        <option value="Health & Fitness">Health & Fitness</option>
+        <option value="Learning & Growth">Learning & Growth</option>
+        <option value="Break Free">Break Free</option>
+        <option value="Productivity">Productivity</option>
+        <option value="Custom">Custom</option>
+      </select>
+      <button type="submit" class="btn btn-primary">+ Add Habit</button>
+    </form>
+
+    <div id="manageHabitList" class="manage-habit-list"></div>
+    <p class="hint">Tip: archiving keeps past history intact; deleting removes a habit and its logged history permanently.</p>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
