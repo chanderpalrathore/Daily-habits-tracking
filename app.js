@@ -21,6 +21,19 @@
 
   const CATEGORY_ORDER = ["Health & Fitness", "Learning & Growth", "Break Free", "Productivity", "Custom"];
 
+  const POINTS_PER_HABIT = 10;
+  const DEFAULT_GOAL_PCT = 80;
+
+  // Scoring benchmark tiers, ordered lowest to highest by points required.
+  const LEVELS = [
+    { name: "Seedling", icon: "🌱", min: 0 },
+    { name: "Bronze", icon: "🥉", min: 100 },
+    { name: "Silver", icon: "🥈", min: 500 },
+    { name: "Gold", icon: "🥇", min: 1500 },
+    { name: "Platinum", icon: "💎", min: 3500 },
+    { name: "Legend", icon: "👑", min: 7000 },
+  ];
+
   // ---------- State ----------
   let state = loadState();
   let viewMonth = new Date(); // month currently shown on calendar
@@ -32,12 +45,29 @@
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.habits) && parsed.logs) return parsed;
+        if (parsed && Array.isArray(parsed.habits) && parsed.logs) {
+          if (!parsed.settings) parsed.settings = { goalPct: DEFAULT_GOAL_PCT };
+          if (typeof parsed.settings.goalPct !== "number") parsed.settings.goalPct = DEFAULT_GOAL_PCT;
+          if (!parsed.startDate) {
+            // Upgrading data saved before tracking start dates existed: assume
+            // tracking began on the earliest logged day (or today, if none yet)
+            // so historical/no-data days aren't wrongly scored as "missed".
+            const loggedDates = Object.keys(parsed.logs).sort();
+            parsed.startDate = loggedDates[0] || fmtDate(new Date());
+          }
+          return parsed;
+        }
       }
     } catch (e) {
       console.warn("Could not read saved data, starting fresh.", e);
     }
-    return { habits: DEFAULT_HABITS.map(h => ({ ...h, archived: false })), logs: {}, notes: {} };
+    return {
+      habits: DEFAULT_HABITS.map(h => ({ ...h, archived: false })),
+      logs: {},
+      notes: {},
+      settings: { goalPct: DEFAULT_GOAL_PCT },
+      startDate: fmtDate(new Date()),
+    };
   }
 
   function saveState() {
@@ -71,6 +101,7 @@
   }
 
   function dayCompletion(dateStr) {
+    if (dateStr < state.startDate) return null; // before tracking began: no data, not "missed"
     const habitsForDay = activeHabits().filter(h => !h.createdAt || h.createdAt <= dateStr);
     if (habitsForDay.length === 0) return null;
     const log = state.logs[dateStr] || {};
@@ -315,6 +346,44 @@
     return days ? Math.round((sumPct / days) * 100) : 0;
   }
 
+  function computeTotalPoints() {
+    let points = 0;
+    for (const dateStr of Object.keys(state.logs)) {
+      const log = state.logs[dateStr];
+      for (const habitId of Object.keys(log)) {
+        if (log[habitId]) points += POINTS_PER_HABIT;
+      }
+    }
+    return points;
+  }
+
+  function getLevel(points) {
+    let current = LEVELS[0];
+    let next = null;
+    for (let i = 0; i < LEVELS.length; i++) {
+      if (points >= LEVELS[i].min) {
+        current = LEVELS[i];
+        next = LEVELS[i + 1] || null;
+      }
+    }
+    return { current, next };
+  }
+
+  function computeMonthProgress() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let sumPct = 0, days = 0;
+    for (let day = 1; day <= now.getDate(); day++) {
+      const dateStr = fmtDate(new Date(year, month, day));
+      const c = dayCompletion(dateStr);
+      if (c && c.total > 0) { sumPct += c.pct; days++; }
+    }
+    const avgPct = days ? Math.round((sumPct / days) * 100) : 0;
+    return { avgPct, daysElapsed: days, daysInMonth };
+  }
+
   function renderStats() {
     const overallStreak = computeOverallStreak();
     const rate30 = computeLast30DayRate();
@@ -331,10 +400,17 @@
       <div class="stat-box"><div class="value">${perfectDays}</div><div class="label">Perfect Days (All Time)</div></div>
     `;
 
+    const points = computeTotalPoints();
+    const { current, next } = getLevel(points);
+
     topbarStatsEl.innerHTML = `
       <div class="stat-chip">🔥 <b>${overallStreak}</b> day streak</div>
       <div class="stat-chip">📊 <b>${rate30}%</b> last 30 days</div>
+      <div class="stat-chip">${current.icon} <b>${points}</b> pts</div>
     `;
+
+    renderScoreLevel(points, current, next);
+    renderGoal();
 
     habitStreaksEl.innerHTML = "";
     const habits = activeHabits();
@@ -349,6 +425,58 @@
       habitStreaksEl.appendChild(row);
     }
   }
+
+  const scoreLevelEl = document.getElementById("scoreLevel");
+  const goalInputEl = document.getElementById("goalInput");
+  const goalProgressBarEl = document.getElementById("goalProgressBar");
+  const goalStatusEl = document.getElementById("goalStatus");
+
+  function renderScoreLevel(points, current, next) {
+    let progressPct = 100;
+    let nextLine = `Top tier reached — you're a ${current.name}!`;
+    if (next) {
+      const span = next.min - current.min;
+      progressPct = Math.min(100, Math.round(((points - current.min) / span) * 100));
+      nextLine = `${next.min - points} pts to ${next.icon} ${next.name}`;
+    }
+    scoreLevelEl.innerHTML = `
+      <div class="score-level-top">
+        <span class="score-level-icon">${current.icon}</span>
+        <span class="score-level-name">${current.name}</span>
+        <span class="score-level-points">${points} pts</span>
+      </div>
+      <div class="level-progress-outer"><div class="level-progress-inner" style="width:${progressPct}%"></div></div>
+      <div class="score-level-next">${nextLine}</div>
+    `;
+  }
+
+  function renderGoal() {
+    const goalPct = state.settings.goalPct;
+    if (document.activeElement !== goalInputEl) goalInputEl.value = goalPct;
+
+    const { avgPct, daysElapsed } = computeMonthProgress();
+    const barPct = Math.min(100, avgPct);
+    goalProgressBarEl.style.width = `${barPct}%`;
+
+    const reached = daysElapsed > 0 && avgPct >= goalPct;
+    goalStatusEl.classList.toggle("reached", reached);
+    if (daysElapsed === 0) {
+      goalStatusEl.textContent = "No data logged yet this month.";
+    } else if (reached) {
+      goalStatusEl.textContent = `🎯 Goal reached! Averaging ${avgPct}% vs your ${goalPct}% target.`;
+    } else {
+      goalStatusEl.textContent = `Averaging ${avgPct}% so far this month — ${goalPct - avgPct}% below your ${goalPct}% target.`;
+    }
+  }
+
+  goalInputEl.addEventListener("input", () => {
+    let val = Number(goalInputEl.value);
+    if (Number.isNaN(val)) return;
+    val = Math.max(1, Math.min(100, val));
+    state.settings.goalPct = val;
+    saveState();
+    renderGoal();
+  });
 
   // ---------- Manage Habits Modal ----------
   const manageModal = document.getElementById("manageModal");
@@ -468,7 +596,16 @@
           throw new Error("File does not look like a habit tracker backup.");
         }
         if (!confirm("Importing will replace your current data. Continue?")) return;
-        state = { habits: parsed.habits, logs: parsed.logs, notes: parsed.notes || {} };
+        const loggedDates = Object.keys(parsed.logs).sort();
+        state = {
+          habits: parsed.habits,
+          logs: parsed.logs,
+          notes: parsed.notes || {},
+          settings: parsed.settings && typeof parsed.settings.goalPct === "number"
+            ? parsed.settings
+            : { goalPct: DEFAULT_GOAL_PCT },
+          startDate: parsed.startDate || loggedDates[0] || todayStr(),
+        };
         saveState();
         renderAll();
       } catch (err) {
